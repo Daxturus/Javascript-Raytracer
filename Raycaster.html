@@ -18,18 +18,20 @@ for (var x = 0; x < 64; x++)
 		for (var z = 0; z < 64; z++)
 		{
 			var filledBlock = false
-			if (Math.random() < 1/17)
+			if (Math.random() < 1/64)
 			{
 				filledBlock = true
 			}
 			var red = Math.random()
 			var green = Math.random() 
 			var blue = Math.random()
+			var intensity = Math.random()
 			var transparency = Math.random()
 			var reflectance = Math.random()
-			var scatter = 0.0025 * Math.random() * 0
-			var brilliance = Math.random() * 2 - 1
-			blocks[x][y].push(filledBlock, red, green, blue, transparency, reflectance, scatter, brilliance)
+			var scatter = 0
+			var bleedthrough = 0
+			var brilliance = 0
+			blocks[x][y].push(filledBlock, red, green, blue, intensity, transparency, reflectance, scatter, bleedthrough, brilliance)
 		}
 	}	
 }
@@ -82,9 +84,10 @@ image.onload = () => {
 };*/
 
 
-const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,camPitch,screenwidth,screenheight,raycastDist,blocks) {
+const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,camPitch,redEnv,grnEnv,bluEnv,screenwidth,screenheight,raycastDist,blocks) {
 	var x = this.thread.x
 	var y = this.thread.y
+	var len = 10
 	var reachedBlock = false
 	var rayAngX = Math.atan((x-screenwidth/2)/screenwidth)
 	var rayAngY = Math.atan((y-screenheight/2)/screenheight)
@@ -103,9 +106,9 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 	var origZ = rayZ
 	var blocksTraveled = 0;
 	var cont = true;
-	var currR = 1
-	var currG = 1
-	var currB = 1
+	var currR = redEnv
+	var currG = grnEnv
+	var currB = bluEnv
 	var prevX = rayX
 	var prevY = rayY
 	var prevZ = rayZ
@@ -136,7 +139,7 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 		var result = 0
 		if (blockX >= 0 && blockX < lx && blockY >= 0 && blockY < ly && blockZ >= 0 && blockZ < lz)
 		{
-			if (blocks[blockX][blockY][blockZ*8] == 1)
+			if (blocks[blockX][blockY][blockZ*len] == 1)
 			{
 				result = 1
 				if (blockIgnore == true)
@@ -177,13 +180,15 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 			}
 			else
 			{
-				var blockR = blocks[blockX][blockY][blockZ*8+1]
-				var blockG = blocks[blockX][blockY][blockZ*8+2]
-				var blockB = blocks[blockX][blockY][blockZ*8+3]
-				var transparency = Math.min(blocks[blockX][blockY][blockZ*8+4],1)
-				var reflectance = blocks[blockX][blockY][blockZ*8+5]
-				var scatter = blocks[blockX][blockY][blockZ*8+6]
-				var brilliance = blocks[blockX][blockY][blockZ*8+7]
+				var blockR = blocks[blockX][blockY][blockZ*len+1]
+				var blockG = blocks[blockX][blockY][blockZ*len+2]
+				var blockB = blocks[blockX][blockY][blockZ*len+3]
+				var intensity = blocks[blockX][blockY][blockZ*len+4]
+				var transparency = blocks[blockX][blockY][blockZ*len+5]
+				var reflectance = blocks[blockX][blockY][blockZ*len+6]
+				var scatter = blocks[blockX][blockY][blockZ*len+7]
+				var bleedthrough = blocks[blockX][blockY][blockZ*len+8]
+				var brilliance = blocks[blockX][blockY][blockZ*len+9]
 				if (blocksTraveled >= raycastDist)
 				{
 					var DistX = rayX - origX
@@ -194,52 +199,23 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 						cont = false
 					}
 				}
-				if (reflectance != 0)
-				{	
-					if (transparency == 0)
+				if (reflectance != 0 || transparency != 0)
+				{
+					if (bleedthrough != 0)
 					{
-						currR = (currR * RGBweight + blockR) / (1 + RGBweight)
-						currG = (currG * RGBweight + blockG) / (1 + RGBweight)
-						currB = (currB * RGBweight + blockB) / (1 + RGBweight)
-						RGBweight = RGBweight + 1/reflectance
-						var xpos = rayX % 1
-						var x2 = Math.abs(xpos - 0.5)
-						var ypos = rayY % 1
-						var y2 = Math.abs(ypos - 0.5)
-						var zpos = rayZ % 1
-						var z2 = Math.abs(zpos - 0.5)
-						if (x2 < y2 && x2 < z2)
-						{
-							rayDX = rayDX * -1
-						}
-						else
-						{
-							if (y2 < x2 && y2 < z2)
-							{
-								rayDY = rayDY * -1
-							}
-							else
-							{
-								rayDZ = rayDZ * -1
-							}
-						}
-					}
-					else
-					{
-						//I tried doing a nested function for this, but the gpu hated that :C
-						//I also tried to do a single bounce and the GPU REALLY hated that
-						//So I am trying one last thing
-						//Sorry to those who want like crazy extreme ultra realistic RTX on gaming
-						if (warpSet && brilliance != 0)
+						if (warpSet)
 						{
 							if (brilliance != -1)
 							{
 								var currR2 = (currR * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpR) / (1 + prevColorWeight / (1-prevColorWeight2))
-								currR = (currR / -brilliance + currR2 / (1+brilliance)) / (1 / -brilliance + 1 / (1+brilliance))
+								currR = (currR + currR2 * (brilliance)) / (1 + brilliance)
+								currR = (onceDoneWarpR * (1-prevColorWeight2) * (1-prevColorWeight) * bleedthrough + currR) / ((1-prevColorWeight2) * (1-prevColorWeight) * bleedthrough + 1)
 								var currG2 = (currG * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpG) / (1 + prevColorWeight / (1-prevColorWeight2))
-								currG = (currG / -brilliance + currG2 / (1+brilliance)) / (1 / -brilliance + 1 / (1+brilliance))
+								currG = (currG + currG2 * (brilliance)) / (1 + brilliance)
+								currG = (onceDoneWarpG * (1-prevColorWeight2) * (1-prevColorWeight) * bleedthrough + currG) / ((1-prevColorWeight2) * (1-prevColorWeight) * bleedthrough + 1)
 								var currB2 = (currB * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpB) / (1 + prevColorWeight / (1-prevColorWeight2))
-								currB = (currB / -brilliance + currB2 / (1+brilliance)) / (1 / -brilliance + 1 / (1+brilliance))
+								currB = (currB + currB2 * (brilliance)) / (1 + brilliance)
+								currB = (onceDoneWarpB * (1-prevColorWeight2) * (1-prevColorWeight) * bleedthrough + currB) / ((1-prevColorWeight2) * (1-prevColorWeight) * bleedthrough + 1)
 							}
 							else
 							{
@@ -257,34 +233,41 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 						onceDoneWarpR = currR
 						onceDoneWarpG = currG
 						onceDoneWarpB = currB
-						currR = currR - (((1-blockR) * currR * (1-transparency)) / (RGBweight))
-						currG = currG - (((1-blockG) * currG * (1-transparency)) / (RGBweight))
-						currB = currB - (((1-blockB) * currB * (1-transparency)) / (RGBweight))
-						onceDoneWarpBlocksTraveled = blocksTraveled
+						currR = currR - (((1-blockR) * currR * (1-transparency) * intensity) / (RGBweight))
+						currG = currG - (((1-blockG) * currG * (1-transparency) * intensity) / (RGBweight))
+						currB = currB - (((1-blockB) * currB * (1-transparency) * intensity) / (RGBweight))
+						onceDoneWarpBlocksTraveled = blocksTraveled + 0.05
 						prevColorWeight = reflectance
 						prevColorWeight2 = transparency
 						prevRGBWeight = RGBweight
 						warpSet = true
-						var xpos = rayX % 1
-						var x2 = Math.abs(xpos - 0.5)
-						var ypos = rayY % 1
-						var y2 = Math.abs(ypos - 0.5)
-						var zpos = rayZ % 1
-						var z2 = Math.abs(zpos - 0.5)
-						if (x2 < y2 && x2 < z2)
+					}
+				}
+				if (reflectance != 0)
+				{	
+					currR = (currR * RGBweight + blockR * (1-transparency) * intensity) / ((1-transparency) * intensity + RGBweight)
+					currG = (currG * RGBweight + blockG * (1-transparency) * intensity) / ((1-transparency) * intensity + RGBweight)
+					currB = (currB * RGBweight + blockB * (1-transparency) * intensity) / ((1-transparency) * intensity + RGBweight)
+					RGBweight = RGBweight + 1/reflectance
+					var xpos = rayX % 1
+					var x2 = Math.abs(xpos - 0.5)
+					var ypos = rayY % 1
+					var y2 = Math.abs(ypos - 0.5)
+					var zpos = rayZ % 1
+					var z2 = Math.abs(zpos - 0.5)
+					if (x2 < y2 && x2 < z2)
+					{
+						rayDX = rayDX * -1
+					}
+					else
+					{
+						if (y2 < x2 && y2 < z2)
 						{
-							rayDX = rayDX * -1
+							rayDY = rayDY * -1
 						}
 						else
 						{
-							if (y2 < x2 && y2 < z2)
-							{
-								rayDY = rayDY * -1
-							}
-							else
-							{
-								rayDZ = rayDZ * -1
-							}
+							rayDZ = rayDZ * -1
 						}
 					}
 				}
@@ -308,9 +291,9 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 				if (transparency == 0)
 				{
 					//RGBweight = RGBweight + finalDist
-					currR = (currR * RGBweight + blockR) / (1 + RGBweight)
-					currG = (currG * RGBweight + blockG) / (1 + RGBweight)
-					currB = (currB * RGBweight + blockB) / (1 + RGBweight)
+					currR = (currR * RGBweight + blockR * intensity) / (intensity + RGBweight)
+					currG = (currG * RGBweight + blockG * intensity) / (intensity + RGBweight)
+					currB = (currB * RGBweight + blockB * intensity) / (intensity + RGBweight)
 				}
 				else
 				{
@@ -319,9 +302,15 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 					var Zdist = rayZ - prevZ
 					var finalDist = Math.sqrt(Xdist * Xdist + Ydist * Ydist + Zdist * Zdist) * (1 - transparency)
 					RGBweight = RGBweight + finalDist
-					currR = currR - (((1-blockR) * currR * (1-transparency)) / (RGBweight))
-					currG = currG - (((1-blockG) * currG * (1-transparency)) / (RGBweight))
-					currB = currB - (((1-blockB) * currB * (1-transparency)) / (RGBweight))
+					var rOut = (((1-blockR) * currR * (1-transparency) * intensity) / (RGBweight))
+					currR = currR - rOut
+					currR = (currR + (1-rOut) * -brilliance) / (1 - brilliance)
+					var gOut = (((1-blockG) * currG * (1-transparency) * intensity) / (RGBweight))
+					currG = currG - gOut
+					currG = (currG + (1-gOut) * -brilliance) / (1 - brilliance)
+					var bOut =  (((1-blockB) * currB * (1-transparency) * intensity) / (RGBweight))
+					currB = currB - bOut
+					currB = (currB + (1-bOut) * -brilliance) / (1 - brilliance)
 					
 				}
 				if (transparency == 0 && reflectance == 0)
@@ -363,17 +352,7 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 	//currG = currG - 1
 	//currB = currB - 1
 	const pix = image[this.thread.y][this.thread.x];
-	if (reachedBlock == true)
-	{
-		var blockX = Math.round(rayX)
-		var blockY = Math.round(rayY)
-		var blockZ = Math.round(rayZ)
-		this.color(currR,currG,currB, pix[3]);
-	}
-	else
-	{
-		this.color(currR,currG,currB, pix[3]);
-	}
+	this.color(currR,currG,currB, pix[3]);
 }).setGraphical(true).setOutput([pixelsX,pixelsY]);
 
 
@@ -385,7 +364,7 @@ function Main() {
 	canvas.fillStyle = "#000000"
 	yaw = yaw + 0.005
 	const image = new Image(pixelsX, pixelsY);
-	raycast(image,lx,ly,lz,plyX,plyY,plyZ,yaw,pitch,pixelsX,pixelsY,raycastDist,blocks)
+	raycast(image,lx,ly,lz,plyX,plyY,plyZ,yaw,pitch,1,1,1,pixelsX,pixelsY,raycastDist,blocks)
 	canvas.drawImage(raycast.canvas,0,0);
 }
 setInterval(Main,1)
