@@ -281,10 +281,6 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 				prevY = rayY
 				prevZ = rayZ
 				var scale = Math.sqrt(3)
-				if (reflectance == 0 && transparency != 0)
-				{
-					scale = 0.5
-				}
 				rayX = rayX + rayDX * scale
 				rayY = rayY + rayDY * scale
 				rayZ = rayZ + rayDZ * scale
