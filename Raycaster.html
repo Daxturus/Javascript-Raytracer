@@ -28,10 +28,9 @@ for (var x = 0; x < 256; x++)
 			var intensity = Math.random()/2+1
 			var transparency = Math.random()
 			var reflectance = Math.random()
-			var scatter = 0
 			var bleedthrough = Math.random()
 			var brilliance = Math.random() * 1 - 0.5
-			blocks[x][y].push(filledBlock, red, green, blue, intensity, transparency, reflectance, scatter, bleedthrough, brilliance)
+			blocks[x][y].push(filledBlock, red, green, blue, intensity, transparency, reflectance, bleedthrough, brilliance)
 		}
 	}	
 }
@@ -87,7 +86,7 @@ image.onload = () => {
 const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,camPitch,redEnv,grnEnv,bluEnv,screenwidth,screenheight,raycastDist,blocks) {
 	var x = this.thread.x
 	var y = this.thread.y
-	var len = 10
+	var len = 9
 	var reachedBlock = false
 	var rayAngX = Math.atan((x-screenwidth/2)/screenwidth)
 	var rayAngY = Math.atan((y-screenheight/2)/screenheight)
@@ -186,9 +185,8 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 				var intensity = blocks[blockX][blockY][blockZ*len+4]
 				var transparency = blocks[blockX][blockY][blockZ*len+5]
 				var reflectance = blocks[blockX][blockY][blockZ*len+6]
-				var scatter = blocks[blockX][blockY][blockZ*len+7]
-				var bleedthrough = blocks[blockX][blockY][blockZ*len+8]
-				var brilliance = blocks[blockX][blockY][blockZ*len+9]
+				var bleedthrough = blocks[blockX][blockY][blockZ*len+7]
+				var brilliance = blocks[blockX][blockY][blockZ*len+8]
 				if (blocksTraveled >= raycastDist)
 				{
 					var DistX = rayX - origX
@@ -270,15 +268,6 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 							rayDZ = rayDZ * -1
 						}
 					}
-				}
-				if (scatter != 0)
-				{
-						var rayPow = Math.sqrt(rayDX * rayDX + rayDY * rayDY + rayDZ * rayDZ) * scatter
-						var ry = Math.random() * 2 * Math.PI
-						var rp = Math.random() * 2 * Math.PI
-						rayDX = rayDX + Math.cos(ry)*Math.cos(rp) * rayPow
-						rayDY = rayDY + Math.sin(ry)*Math.cos(rp) * rayPow
-						rayDZ = rayDZ + Math.sin(rp) * rayPow
 				}
 				prevX = rayX
 				prevY = rayY
