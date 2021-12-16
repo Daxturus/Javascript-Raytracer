@@ -19,7 +19,7 @@ for (var x = 0; x < 64; x++)
 		for (var z = 0; z < 64; z++)
 		{
 			var filledBlock = false
-			if (Math.random() < 1/64)
+			if (Math.random() < 1/17)
 			{
 				filledBlock = true
 			}
@@ -126,6 +126,7 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 	var onceDoneWarpBlocksTraveled = 0
 	var prevColorWeight = 0
 	var prevColorWeight2 = 0
+	var prevRGBWeight = 0
 	var warpSet = false
 	while (cont && !reachedBlock) //until it hits a block
 	{
@@ -237,9 +238,13 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 						onceDoneWarpR = currR
 						onceDoneWarpG = currG
 						onceDoneWarpB = currB
+						currR = currR - (((1-blockR) * currR * (1-transparency)) / (RGBweight))
+						currG = currG - (((1-blockG) * currG * (1-transparency)) / (RGBweight))
+						currB = currB - (((1-blockB) * currB * (1-transparency)) / (RGBweight))
 						onceDoneWarpBlocksTraveled = blocksTraveled
 						prevColorWeight = reflectance
 						prevColorWeight2 = transparency
+						prevRGBWeight = RGBweight
 						warpSet = true
 						var xpos = rayX % 1
 						var x2 = Math.abs(xpos - 0.5)
@@ -262,10 +267,6 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 								rayDZ = rayDZ * -1
 							}
 						}
-						currR = (currR * RGBweight + blockR) / (1 + RGBweight)
-						currG = (currG * RGBweight + blockG) / (1 + RGBweight)
-						currB = (currB * RGBweight + blockB) / (1 + RGBweight)
-						RGBweight = RGBweight + 1/reflectance
 					}
 				}
 				if (scatter != 0)
@@ -332,6 +333,7 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 				ignoreBlockY = Math.floor(rayY)
 				ignoreBlockZ = Math.floor(rayZ)
 				blocksTraveled = onceDoneWarpBlocksTraveled
+				RGBweight = prevRGBWeight
 				currR = (currR * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpR) / (1 + prevColorWeight / (1-prevColorWeight2))
 				currG = (currG * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpG) / (1 + prevColorWeight / (1-prevColorWeight2))
 				currB = (currB * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpB) / (1 + prevColorWeight / (1-prevColorWeight2))
@@ -363,7 +365,7 @@ function Main() {
 	canvas.fillRect(0,0,screen.width,screen.height)
 	canvas.fillStyle = "#000000"
 	yaw = yaw + 0.005
-	//plyX = Math.abs((yaw%100)-50)-25
+	plyX = Math.abs((yaw%100)-50)-25
 	const image = new Image(pixelsX, pixelsY);
 	raycast(image,lx,ly,lz,plyX,plyY,plyZ,yaw,pitch,pixelsX,pixelsY,raycastDist,blocks)
 	canvas.drawImage(raycast.canvas,0,0);
