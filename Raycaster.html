@@ -9,13 +9,13 @@ var canvas = screen.getContext('2d');
 
 
 var blocks = []
-for (var x = 0; x < 64; x++)
+for (var x = 0; x < 256; x++)
 {
 	blocks.push([])
-	for (var y = 0; y < 64; y++)
+	for (var y = 0; y < 256; y++)
 	{
 		blocks[x].push([])
-		for (var z = 0; z < 64; z++)
+		for (var z = 0; z < 256; z++)
 		{
 			var filledBlock = false
 			if (Math.random() < 1/64)
@@ -25,12 +25,12 @@ for (var x = 0; x < 64; x++)
 			var red = Math.random()
 			var green = Math.random() 
 			var blue = Math.random()
-			var intensity = Math.random()
+			var intensity = Math.random()/2+1
 			var transparency = Math.random()
 			var reflectance = Math.random()
 			var scatter = 0
-			var bleedthrough = 0
-			var brilliance = 0
+			var bleedthrough = Math.random()
+			var brilliance = Math.random() * 1 - 0.5
 			blocks[x][y].push(filledBlock, red, green, blue, intensity, transparency, reflectance, scatter, bleedthrough, brilliance)
 		}
 	}	
