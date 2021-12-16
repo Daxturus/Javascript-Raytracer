@@ -364,7 +364,6 @@ function Main() {
 	canvas.fillRect(0,0,screen.width,screen.height)
 	canvas.fillStyle = "#000000"
 	yaw = yaw + 0.005
-	plyX = Math.abs((yaw%100)-50)-25
 	const image = new Image(pixelsX, pixelsY);
 	raycast(image,lx,ly,lz,plyX,plyY,plyZ,yaw,pitch,pixelsX,pixelsY,raycastDist,blocks)
 	canvas.drawImage(raycast.canvas,0,0);
