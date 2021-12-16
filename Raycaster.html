@@ -1,0 +1,380 @@
+<canvas id="screen" width="512" height="512"/>
+<script src="gpu.js"></script>
+
+
+<script>
+var screen = document.getElementById('screen');
+var canvas = screen.getContext('2d');
+//setInterval(Main, 5000); 
+
+
+
+var blocks = []
+for (var x = 0; x < 64; x++)
+{
+	blocks.push([])
+	for (var y = 0; y < 64; y++)
+	{
+		blocks[x].push([])
+		for (var z = 0; z < 64; z++)
+		{
+			var filledBlock = false
+			if (Math.random() < 1/64)
+			{
+				filledBlock = true
+			}
+			var red = Math.random()
+			var green = Math.random() 
+			var blue = Math.random()
+			var transparency = Math.random()
+			var reflectance = Math.random()
+			var scatter = 0.0025 * Math.random()
+			blocks[x][y].push(filledBlock, red, green, blue, transparency, reflectance, scatter)
+		}
+	}	
+}
+var lx = blocks.length
+var ly = blocks[0].length
+var lz = blocks[0][0].length
+function getBlockFilled(x,y,z)
+{
+	
+	var bx = x
+	var by = y
+	var bz = z
+	if (bx >= 0 && bx < lx && by >= 0 && by < ly && bz >= 0 && bz < lz)
+	{
+		if (blocks[bx][by][bz].filled == true)
+		{
+			return 1
+		}
+	}
+	else
+	{
+		return 2
+	}
+	return 0
+}
+
+var plyX = 0
+
+var plyY = 0
+
+var plyZ = 0
+
+
+var raycastDist = 50
+
+const gpu = new GPU()
+var pixelsX = 1024
+var pixelsY = 1024
+/*const kernel = gpu.createKernel(function(image) {
+    ...
+})
+  .setGraphical(true)
+  .setOutput([100, 100]);
+
+const image = document.createElement('img');
+image.src = 'image1.png';
+image.onload = () => {
+  kernel(image);  
+  document.getElementsByTagName('body')[0].appendChild(kernel.canvas);
+};*/
+
+
+const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,camPitch,screenwidth,screenheight,raycastDist,blocks) {
+	var x = this.thread.x
+	var y = this.thread.y
+	var reachedBlock = false
+	var rayAngX = Math.atan((x-screenwidth/2)/screenwidth)
+	var rayAngY = Math.atan((y-screenheight/2)/screenheight)
+	var rayDX = Math.cos(camYaw + rayAngX)*Math.cos(camPitch + rayAngY)
+	var rayDY = Math.sin(camYaw + rayAngX)*Math.cos(camPitch + rayAngY)
+	var rayDZ = Math.sin(camPitch + rayAngY)
+	var rayX = camX + lx/2 + rayDX
+	var rayY = camY + ly/2 + rayDY
+	var rayZ = camZ + lz/2 + rayDZ
+	var tot = Math.sqrt(rayDX * rayDX + rayDY * rayDY + rayDZ * rayDZ)
+	rayDX = rayDX / tot
+	rayDY = rayDY / tot
+	rayDZ = rayDZ / tot
+	var origX = rayX
+	var origY = rayY
+	var origZ = rayZ
+	var blocksTraveled = 0;
+	var cont = true;
+	var currR = 1
+	var currG = 1
+	var currB = 1
+	var prevX = rayX
+	var prevY = rayY
+	var prevZ = rayZ
+	var RGBweight = 1
+	var onceDoneWarpToX = 0
+	var onceDoneWarpToY = 0
+	var onceDoneWarpToZ = 0
+	var onceDoneWarpToDX = 0
+	var onceDoneWarpToDY = 0
+	var onceDoneWarpToDZ = 0
+	var onceDoneWarpR = 0
+	var onceDoneWarpG = 0
+	var onceDoneWarpB = 0
+	var blockIgnore = false
+	var ignoreBlockX = -lx
+	var ignoreBlockY = -ly
+	var ignoreBlockZ = -lz
+	var onceDoneWarpBlocksTraveled = 0
+	var prevColorWeight = 0
+	var prevColorWeight2 = 0
+	var warpSet = false
+	while (cont && !reachedBlock) //until it hits a block
+	{
+		var blockX = Math.round(rayX)
+		var blockY = Math.round(rayY)
+		var blockZ = Math.round(rayZ)
+		var result = 0
+		if (blockX >= 0 && blockX < lx && blockY >= 0 && blockY < ly && blockZ >= 0 && blockZ < lz)
+		{
+			if (blocks[blockX][blockY][blockZ*7] == 1)
+			{
+				result = 1
+				if (blockIgnore == true)
+				{
+					if (blockX == ignoreBlockX && blockY == ignoreBlockY && blockZ == ignoreBlockZ)
+					{
+						result = 0
+					}
+				}
+			}
+		}
+		else
+		{
+			result = 2
+		}
+		if (result != 2)
+		{
+			if (result == 0)
+			{
+				prevX = rayX
+				prevY = rayY
+				prevZ = rayZ
+				var scale = 0.05 / Math.sqrt(rayDX * rayDX + rayDY * rayDY + rayDZ * rayDZ)
+				rayX = rayX + rayDX * scale
+				rayY = rayY + rayDY * scale
+				rayZ = rayZ + rayDZ * scale
+				blocksTraveled = blocksTraveled + 1 * scale
+				if (blocksTraveled >= raycastDist)
+				{
+					var DistX = rayX - origX
+					var DistY = rayY - origY
+					var DistZ = rayZ - origZ
+					if (Math.sqrt(DistX * DistX + DistY * DistY + DistZ * DistZ) > raycastDist)
+					{
+						cont = false
+					}
+				}
+			}
+			else
+			{
+				var blockR = blocks[blockX][blockY][blockZ*7+1]
+				var blockG = blocks[blockX][blockY][blockZ*7+2]
+				var blockB = blocks[blockX][blockY][blockZ*7+3]
+				var transparency = Math.min(blocks[blockX][blockY][blockZ*7+4],1)
+				var reflectance = blocks[blockX][blockY][blockZ*7+5]
+				var scatter = blocks[blockX][blockY][blockZ*7+6]
+				if (blocksTraveled >= raycastDist)
+				{
+					var DistX = rayX - origX
+					var DistY = rayY - origY
+					var DistZ = rayZ - origZ
+					if (Math.sqrt(DistX * DistX + DistY * DistY + DistZ * DistZ) > raycastDist)
+					{
+						cont = false
+					}
+				}
+				if (reflectance != 0)
+				{	
+					if (transparency == 0)
+					{
+						currR = (currR * RGBweight + blockR) / (1 + RGBweight)
+						currG = (currG * RGBweight + blockG) / (1 + RGBweight)
+						currB = (currB * RGBweight + blockB) / (1 + RGBweight)
+						RGBweight = RGBweight + 1/reflectance
+						var xpos = rayX % 1
+						var x2 = Math.abs(xpos - 0.5)
+						var ypos = rayY % 1
+						var y2 = Math.abs(ypos - 0.5)
+						var zpos = rayZ % 1
+						var z2 = Math.abs(zpos - 0.5)
+						if (x2 < y2 && x2 < z2)
+						{
+							rayDX = rayDX * -1
+						}
+						else
+						{
+							if (y2 < x2 && y2 < z2)
+							{
+								rayDY = rayDY * -1
+							}
+							else
+							{
+								rayDZ = rayDZ * -1
+							}
+						}
+					}
+					else
+					{
+						//I tried doing a nested function for this, but the gpu hated that :C
+						//I also tried to do a single bounce and the GPU REALLY hated that
+						//So I am trying one last thing
+						//Sorry to those who want like crazy extreme ultra realistic RTX on gaming
+						onceDoneWarpToX = rayX + rayDX * 0.5
+						onceDoneWarpToY = rayY + rayDY * 0.5
+						onceDoneWarpToZ = rayZ + rayDZ * 0.5
+						onceDoneWarpToDX = rayDX
+						onceDoneWarpToDY = rayDY
+						onceDoneWarpToDZ = rayDZ
+						onceDoneWarpR = currR
+						onceDoneWarpG = currG
+						onceDoneWarpB = currB
+						onceDoneWarpBlocksTraveled = blocksTraveled
+						prevColorWeight = reflectance
+						prevColorWeight2 = transparency
+						warpSet = true
+						var xpos = rayX % 1
+						var x2 = Math.abs(xpos - 0.5)
+						var ypos = rayY % 1
+						var y2 = Math.abs(ypos - 0.5)
+						var zpos = rayZ % 1
+						var z2 = Math.abs(zpos - 0.5)
+						if (x2 < y2 && x2 < z2)
+						{
+							rayDX = rayDX * -1
+						}
+						else
+						{
+							if (y2 < x2 && y2 < z2)
+							{
+								rayDY = rayDY * -1
+							}
+							else
+							{
+								rayDZ = rayDZ * -1
+							}
+						}
+						currR = (currR * RGBweight + blockR) / (1 + RGBweight)
+						currG = (currG * RGBweight + blockG) / (1 + RGBweight)
+						currB = (currB * RGBweight + blockB) / (1 + RGBweight)
+						RGBweight = RGBweight + 1/reflectance
+					}
+				}
+				if (scatter != 0)
+				{
+						var rayPow = Math.sqrt(rayDX * rayDX + rayDY * rayDY + rayDZ * rayDZ) * scatter
+						var ry = Math.random() * 2 * Math.PI
+						var rp = Math.random() * 2 * Math.PI
+						rayDX = rayDX + Math.cos(ry)*Math.cos(rp) * rayPow
+						rayDY = rayDY + Math.sin(ry)*Math.cos(rp) * rayPow
+						rayDZ = rayDZ + Math.sin(rp) * rayPow
+				}
+				prevX = rayX
+				prevY = rayY
+				prevZ = rayZ
+				var scale = Math.sqrt(3)
+				if (reflectance == 0 && transparency != 0)
+				{
+					scale = 0.5
+				}
+				rayX = rayX + rayDX * scale
+				rayY = rayY + rayDY * scale
+				rayZ = rayZ + rayDZ * scale
+				blocksTraveled = blocksTraveled + 1 * scale
+				if (transparency == 0)
+				{
+					//RGBweight = RGBweight + finalDist
+					currR = (currR * RGBweight + blockR) / (1 + RGBweight)
+					currG = (currG * RGBweight + blockG) / (1 + RGBweight)
+					currB = (currB * RGBweight + blockB) / (1 + RGBweight)
+				}
+				else
+				{
+					var Xdist = rayX - prevX
+					var Ydist = rayY - prevY
+					var Zdist = rayZ - prevZ
+					var finalDist = Math.sqrt(Xdist * Xdist + Ydist * Ydist + Zdist * Zdist) * (1 - transparency)
+					RGBweight = RGBweight + finalDist
+					currR = currR - (((1-blockR) * currR * (1-transparency)) / (RGBweight))
+					currG = currG - (((1-blockG) * currG * (1-transparency)) / (RGBweight))
+					currB = currB - (((1-blockB) * currB * (1-transparency)) / (RGBweight))
+					
+				}
+				if (transparency == 0 && reflectance == 0)
+				{
+					reachedBlock = true
+				}
+			}
+		}
+		else
+		{
+			cont = false
+		}
+		if (cont == false || reachedBlock == true)
+		{
+			if (warpSet == true)
+			{
+				warpSet = false
+				cont = true
+				reachedBlock = false
+				rayX = onceDoneWarpToX
+				rayY = onceDoneWarpToY
+				rayZ = onceDoneWarpToZ
+				rayDX = onceDoneWarpToDX
+				rayDY = onceDoneWarpToDY
+				rayDZ = onceDoneWarpToDZ
+				blockIgnore = true
+				ignoreBlockX = Math.floor(rayX)
+				ignoreBlockY = Math.floor(rayY)
+				ignoreBlockZ = Math.floor(rayZ)
+				blocksTraveled = onceDoneWarpBlocksTraveled
+				currR = (currR * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpR) / (1 + prevColorWeight / (1-prevColorWeight2))
+				currG = (currG * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpG) / (1 + prevColorWeight / (1-prevColorWeight2))
+				currB = (currB * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpB) / (1 + prevColorWeight / (1-prevColorWeight2))
+			}	
+		}
+	}
+	//currR = currR - 1
+	//currG = currG - 1
+	//currB = currB - 1
+	const pix = image[this.thread.y][this.thread.x];
+	if (reachedBlock == true)
+	{
+		var blockX = Math.round(rayX)
+		var blockY = Math.round(rayY)
+		var blockZ = Math.round(rayZ)
+		this.color(currR,currG,currB, pix[3]);
+	}
+	else
+	{
+		this.color(currR,currG,currB, pix[3]);
+	}
+}).setGraphical(true).setOutput([pixelsX,pixelsY]);
+
+
+var yaw = 0
+var pitch = 0
+function Main() {
+	canvas.fillStyle = "#ffffff"
+	canvas.fillRect(0,0,screen.width,screen.height)
+	canvas.fillStyle = "#000000"
+	yaw = yaw + 0.005
+	//plyX = Math.abs((yaw%100)-50)-25
+	const image = new Image(pixelsX, pixelsY);
+	raycast(image,lx,ly,lz,plyX,plyY,plyZ,yaw,pitch,pixelsX,pixelsY,raycastDist,blocks)
+	canvas.drawImage(raycast.canvas,0,0);
+}
+setInterval(Main,1)
+
+
+
+
+</script>
