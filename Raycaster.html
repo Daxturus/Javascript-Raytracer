@@ -28,7 +28,7 @@ for (var x = 0; x < 64; x++)
 			var transparency = Math.random()
 			var reflectance = Math.random()
 			var scatter = 0.0025 * Math.random() * 0
-			var brilliance = -0.1
+			var brilliance = -1
 			blocks[x][y].push(filledBlock, red, green, blue, transparency, reflectance, scatter, brilliance)
 		}
 	}	
@@ -235,11 +235,11 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 							if (brilliance != 1)
 							{
 								var currR2 = (currR * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpR) / (1 + prevColorWeight / (1-prevColorWeight2))
-								currR = (currR / brilliance + currR2 / (1-brilliance)) / (1 / brilliance + 1 / (1.0001-brilliance))
+								currR = (currR / brilliance + currR2 / (1-brilliance)) / (1 / brilliance + 1 / (1-brilliance))
 								var currG2 = (currG * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpG) / (1 + prevColorWeight / (1-prevColorWeight2))
-								currG = (currG / brilliance + currG2 / (1-brilliance)) / (1 / brilliance + 1 / (1.0001-brilliance))
+								currG = (currG / brilliance + currG2 / (1-brilliance)) / (1 / brilliance + 1 / (1-brilliance))
 								var currB2 = (currB * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpB) / (1 + prevColorWeight / (1-prevColorWeight2))
-								currB = (currB / brilliance + currB2 / (1-brilliance)) / (1 / brilliance + 1 / (1.0001-brilliance))
+								currB = (currB / brilliance + currB2 / (1-brilliance)) / (1 / brilliance + 1 / (1-brilliance))
 							}
 						}
 						onceDoneWarpToX = rayX + rayDX * 0.5
