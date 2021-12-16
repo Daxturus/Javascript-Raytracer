@@ -28,7 +28,7 @@ for (var x = 0; x < 64; x++)
 			var transparency = Math.random()
 			var reflectance = Math.random()
 			var scatter = 0.0025 * Math.random() * 0
-			var brilliance = -1
+			var brilliance = Math.random() - 0.5
 			blocks[x][y].push(filledBlock, red, green, blue, transparency, reflectance, scatter, brilliance)
 		}
 	}	
