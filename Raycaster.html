@@ -243,11 +243,7 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 					}
 				}
 				if (reflectance != 0)
-				{	
-					currR = (currR * RGBweight + blockR * (1-transparency) * intensity) / ((1-transparency) * intensity + RGBweight)
-					currG = (currG * RGBweight + blockG * (1-transparency) * intensity) / ((1-transparency) * intensity + RGBweight)
-					currB = (currB * RGBweight + blockB * (1-transparency) * intensity) / ((1-transparency) * intensity + RGBweight)
-					RGBweight = RGBweight + 1/reflectance
+				{
 					var xpos = rayX % 1
 					var x2 = Math.abs(xpos - 0.5)
 					var ypos = rayY % 1
@@ -287,25 +283,32 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 				}
 				else
 				{
-					var Xdist = rayX - prevX
-					var Ydist = rayY - prevY
-					var Zdist = rayZ - prevZ
-					var finalDist = Math.sqrt(Xdist * Xdist + Ydist * Ydist + Zdist * Zdist) * (1 - transparency)
-					RGBweight = RGBweight + finalDist
-					var rOut = (((1-blockR) * currR * (1-transparency) * intensity) / (RGBweight))
-					currR = currR - rOut
-					currR = (currR + (1-rOut) * -brilliance) / (1 - brilliance)
-					var gOut = (((1-blockG) * currG * (1-transparency) * intensity) / (RGBweight))
-					currG = currG - gOut
-					currG = (currG + (1-gOut) * -brilliance) / (1 - brilliance)
-					var bOut =  (((1-blockB) * currB * (1-transparency) * intensity) / (RGBweight))
-					currB = currB - bOut
-					currB = (currB + (1-bOut) * -brilliance) / (1 - brilliance)
+					if (reflectance == 0)
+					{
+						var Xdist = rayX - prevX
+						var Ydist = rayY - prevY
+						var Zdist = rayZ - prevZ
+						var finalDist = Math.sqrt(Xdist * Xdist + Ydist * Ydist + Zdist * Zdist) * (1 - transparency)
+						RGBweight = RGBweight + finalDist
+						var rOut = (((1-blockR) * currR * (1-transparency) * intensity) / (RGBweight))
+						currR = currR - rOut
+						currR = (currR + (1-rOut) * -brilliance) / (1 - brilliance)
+						var gOut = (((1-blockG) * currG * (1-transparency) * intensity) / (RGBweight))
+						currG = currG - gOut
+						currG = (currG + (1-gOut) * -brilliance) / (1 - brilliance)
+						var bOut =  (((1-blockB) * currB * (1-transparency) * intensity) / (RGBweight))
+						currB = currB - bOut
+						currB = (currB + (1-bOut) * -brilliance) / (1 - brilliance)
+						reachedBlock = true
+					}
+					else
+					{
+						currR = (currR * RGBweight + blockR * (1-transparency) * intensity) / ((1-transparency) * intensity + RGBweight)
+						currG = (currG * RGBweight + blockG * (1-transparency) * intensity) / ((1-transparency) * intensity + RGBweight)
+						currB = (currB * RGBweight + blockB * (1-transparency) * intensity) / ((1-transparency) * intensity + RGBweight)
+						RGBweight = RGBweight + 1/reflectance
+					}
 					
-				}
-				if (transparency == 0 && reflectance == 0)
-				{
-					reachedBlock = true
 				}
 			}
 		}
