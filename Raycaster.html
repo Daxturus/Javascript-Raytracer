@@ -25,10 +25,11 @@ for (var x = 0; x < 64; x++)
 			var red = Math.random()
 			var green = Math.random() 
 			var blue = Math.random()
-			var transparency = Math.random() * Math.random() * Math.random() * Math.random()
-			var reflectance = Math.random() * Math.random() * Math.random() * Math.random()
+			var transparency = Math.random()
+			var reflectance = Math.random()
 			var scatter = 0.0025 * Math.random() * 0
-			blocks[x][y].push(filledBlock, red, green, blue, transparency, reflectance, scatter)
+			var brilliance = Math.random()
+			blocks[x][y].push(filledBlock, red, green, blue, transparency, reflectance, scatter, brilliance)
 		}
 	}	
 }
@@ -135,7 +136,7 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 		var result = 0
 		if (blockX >= 0 && blockX < lx && blockY >= 0 && blockY < ly && blockZ >= 0 && blockZ < lz)
 		{
-			if (blocks[blockX][blockY][blockZ*7] == 1)
+			if (blocks[blockX][blockY][blockZ*8] == 1)
 			{
 				result = 1
 				if (blockIgnore == true)
@@ -176,12 +177,13 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 			}
 			else
 			{
-				var blockR = blocks[blockX][blockY][blockZ*7+1]
-				var blockG = blocks[blockX][blockY][blockZ*7+2]
-				var blockB = blocks[blockX][blockY][blockZ*7+3]
-				var transparency = Math.min(blocks[blockX][blockY][blockZ*7+4],1)
-				var reflectance = blocks[blockX][blockY][blockZ*7+5]
-				var scatter = blocks[blockX][blockY][blockZ*7+6]
+				var blockR = blocks[blockX][blockY][blockZ*8+1]
+				var blockG = blocks[blockX][blockY][blockZ*8+2]
+				var blockB = blocks[blockX][blockY][blockZ*8+3]
+				var transparency = Math.min(blocks[blockX][blockY][blockZ*8+4],1)
+				var reflectance = blocks[blockX][blockY][blockZ*8+5]
+				var scatter = blocks[blockX][blockY][blockZ*8+6]
+				var brilliance = blocks[blockX][blockY][blockZ*8+7]
 				if (blocksTraveled >= raycastDist)
 				{
 					var DistX = rayX - origX
@@ -228,6 +230,18 @@ const raycast = gpu.createKernel(function(image,lx,ly,lz,camX,camY,camZ,camYaw,c
 						//I also tried to do a single bounce and the GPU REALLY hated that
 						//So I am trying one last thing
 						//Sorry to those who want like crazy extreme ultra realistic RTX on gaming
+						if (warpSet && brilliance > 0)
+						{
+							if (brilliance < 1)
+							{
+								var currR2 = (currR * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpR) / (1 + prevColorWeight / (1-prevColorWeight2))
+								currR = (currR / brilliance + currR2 / (1-brilliance)) / (1 / brilliance + 1 / (1.0001-brilliance))
+								var currG2 = (currG * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpG) / (1 + prevColorWeight / (1-prevColorWeight2))
+								currG = (currG / brilliance + currG2 / (1-brilliance)) / (1 / brilliance + 1 / (1.0001-brilliance))
+								var currB2 = (currB * prevColorWeight / (1-prevColorWeight2) + onceDoneWarpB) / (1 + prevColorWeight / (1-prevColorWeight2))
+								currB = (currB / brilliance + currB2 / (1-brilliance)) / (1 / brilliance + 1 / (1.0001-brilliance))
+							}
+						}
 						onceDoneWarpToX = rayX + rayDX * 0.5
 						onceDoneWarpToY = rayY + rayDY * 0.5
 						onceDoneWarpToZ = rayZ + rayDZ * 0.5
