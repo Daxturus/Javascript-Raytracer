@@ -29,7 +29,7 @@ for (var x = 0; x < 32; x++)
 			var transparency = 0
 			var reflectance = 0.5
 			var bleedthrough = 0
-			var selectivity = 0
+			var selectivity = Math.random()
 			blocks[x][y].push(filledBlock, red, green, blue, intensity, transparency, reflectance, bleedthrough, selectivity)
 		}
 	}	
